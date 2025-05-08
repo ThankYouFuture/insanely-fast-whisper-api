@@ -1,4 +1,4 @@
-# Insanely Fast Whisper API
+# Insanely Fast Whisper API for MAC Apple Silicon
 An API to transcribe audio with [OpenAI's Whisper Large v3](https://huggingface.co/openai/whisper-large-v3)! Powered by 🤗 Transformers and Optimum, with support for Apple Silicon (MPS) and NVIDIA GPUs (utilizing flash-attn where available).
 
 Features:
