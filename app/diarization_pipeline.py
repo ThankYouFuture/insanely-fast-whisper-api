@@ -8,12 +8,24 @@ from .diarize import (
 )
 
 
+# Déterminer le périphérique à utiliser pour la diarisation
+if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+    diarization_device = torch.device("mps")
+    print("Diarization using MPS device")
+elif torch.cuda.is_available():
+    diarization_device = torch.device("cuda:0")
+    print("Diarization using CUDA device")
+else:
+    diarization_device = torch.device("cpu")
+    print("Diarization using CPU device")
+
+
 def diarize(hf_token, file_name, outputs):
     diarization_pipeline = Pipeline.from_pretrained(
         checkpoint_path="pyannote/speaker-diarization-3.1",
         use_auth_token=hf_token,
     )
-    diarization_pipeline.to(torch.device("cuda:0"))
+    diarization_pipeline.to(diarization_device)
 
     inputs, diarizer_inputs = preprocess_inputs(inputs=file_name)
 

@@ -1,8 +1,8 @@
 [tool.poetry]
-name = "insanely-fast-whisper-api"
+name = "insanely-fast-whisper-api-mac"
 version = "0.2.0"
-description = "An insanely fast whisper API"
-authors = ["Yoeven D Khemlani <yoevenkhem@gmail.com>"]
+description = "An insanely fast whisper API for mac"
+authors = ["Thank You Future <contact@thankyoufuture.com>"]
 packages = [{ include = "app" }]
 readme = "README.md"
 license = "MIT"

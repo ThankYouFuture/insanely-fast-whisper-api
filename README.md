@@ -1,9 +1,9 @@
 # Insanely Fast Whisper API
-An API to transcribe audio with [OpenAI's Whisper Large v3](https://huggingface.co/openai/whisper-large-v3)! Powered by 🤗 Transformers, Optimum & flash-attn
+An API to transcribe audio with [OpenAI's Whisper Large v3](https://huggingface.co/openai/whisper-large-v3)! Powered by 🤗 Transformers and Optimum, with support for Apple Silicon (MPS) and NVIDIA GPUs (utilizing flash-attn where available).
 
 Features:
 * 🎤 Transcribe audio to text at blazing fast speeds
-* 📖 Fully open source and deployable on any GPU cloud provider
+* 📖 Fully open source, deployable on GPU cloud providers (for NVIDIA GPUs), and runnable locally on systems with NVIDIA GPUs or Macs with Apple Silicon (MPS).
 * 🗣️ Built-in speaker diarization
 * ⚡ Easy to use and Fast API layer
 * 📃 Async background tasks and webhooks
@@ -14,66 +14,29 @@ Features:
 
 Based on [Insanely Fast Whisper CLI](https://github.com/Vaibhavs10/insanely-fast-whisper) project. Check it out if you like to set up this project locally or understand the background of insanely-fast-whisper.
 
-This project is focused on providing a deployable blazing fast whisper API with docker on cloud infrastructure with GPUs for scalable production use cases.
+### Apple Silicon (Mac) Support
+This project has been adapted to run on Macs with Apple Silicon (M1/M2/M3 series chips) leveraging Metal Performance Shaders (MPS) for hardware acceleration.
+When running on MPS:
+* The `flash-attn` optimization (specific to NVIDIA GPUs) is not used.
+* Performance will vary based on your Mac's specific chip and configuration.
+The application dynamically detects available hardware (MPS, CUDA, or CPU) and configures itself accordingly.
 
-With [Fly.io recent GPU service launch](https://fly.io/docs/gpus/gpu-quickstart/), I've set up the fly config file to easily deploy on fly machines! However, you can deploy this on any other VM environment that supports GPUs and docker.
+This project is focused on providing a deployable blazing fast whisper API with docker. It can be deployed on cloud infrastructure with NVIDIA GPUs for scalable production use cases, or run locally on compatible hardware including Macs.
 
 
-Here are some benchmarks we ran on Nvidia A100 - 80GB and fly.io GPU infra👇
+**Note on Benchmarks:** The benchmarks below were performed on NVIDIA A100-80GB GPUs utilizing Flash Attention 2. These are indicative of performance on high-end NVIDIA hardware. Performance on other hardware, such as Apple Silicon (MPS), will differ.
+
+Here are some benchmarks we ran on Nvidia A100 - 80GB GPUs👇
 | Optimization type    | Time to Transcribe (150 mins of Audio) |
 |------------------|------------------|
 | **large-v3 (Transformers) (`fp16` + `batching [24]` + `Flash Attention 2`)** | **~2 (*1 min 38 sec*)**            |
 | **large-v3 (Transformers) (`fp16` + `batching [24]` + `Flash Attention 2` + `diarization`)** | **~2 (*3 min 16 sec*)**            |
-| **large-v3 (Transformers) (`fp16` + `batching [24]` + `Flash Attention 2` + `fly machine startup`)** | **~2 (*1 min 58 sec*)**            |
-| **large-v3 (Transformers) (`fp16` + `batching [24]` + `Flash Attention 2` + `diarization + fly machine startup`)** | **~2 (*3 min 36 sec*)**|
-
-The estimated startup time for the Fly machine with GPU and loading up the model is around ~20 seconds. The rest of the time is spent on the actual computation.
 
 ## Docker image
 ```
 yoeven/insanely-fast-whisper-api:latest
 ```
 Docker hub: [yoeven/insanely-fast-whisper-api](https://hub.docker.com/r/yoeven/insanely-fast-whisper-api)
-
-## Deploying to Fly
-- Make sure you already have access to Fly GPUs.
-- Clone the project locally and open a terminal in the root
-- Rename the `app` name in the `fly.toml` if you like
-- Remove `image = 'yoeven/insanely-fast-whisper-api:latest'` in `fly.toml` only if you want to rebuild the image from the `Dockerfile`
-
-[Install fly cli](https://fly.io/docs/hands-on/install-flyctl/) if don't already have it
-
-Only need to run this the first time you launch a new fly app
-```bash
-fly launch
-```
-
-- Fly will prompt: `Would you like to copy its configuration to the new app? (y/N)`. Yes (`y`) to copy configuration from the repo.
-
-- Fly will prompt: `Do you want to tweak these settings before proceeding` if you have nothing to adjust. Most of the required settings are already configured in the `fly.toml` file. No `n` to proceed and deploy.
-
-The first time you deploy it will take some time since the image is huge. Subsequent deploys will be a lot faster.
-
-Run the following if you want to set up speaker diarization or an auth token to secure your API:
-
-```bash
-fly secrets set ADMIN_KEY=<your_token> HF_TOKEN=<your_hf_key>
-```
-Run `fly secrets list` to check if the secrets exist.
-
-To get the Hugging face token for speaker diarization you need to do the following:
-1. Accept [`pyannote/segmentation-3.0`](https://hf.co/pyannote/segmentation-3.0) user conditions
-2. Accept [`pyannote/speaker-diarization-3.1`](https://hf.co/pyannote/speaker-diarization-3.1) user conditions
-3. Create an access token at [`hf.co/settings/tokens`](https://hf.co/settings/tokens).
-
-
-Your API should look something like this:
-
-```
-https://insanely-fast-whisper-api.fly.dev
-```
-
-Run `fly logs -a insanely-fast-whisper-api` to view logs in real time of your fly machine.
 
 ## Deploying to other cloud providers
 Since this is a dockerized app, you can deploy it to any cloud provider that supports docker and GPUs with a few config tweaks.
@@ -90,10 +53,6 @@ If you had set up the `ADMIN_KEY` environment secret. You'll need to pass `x-adm
 
 ### Endpoints
 #### Base URL
-If deployed on Fly, the base URL should look something like this:
-```
-https://{app_name}.fly.dev/{path}
-```
 Depending on the cloud provider you deploy to, the base URL will be different.
 
 #### **POST** `/`
@@ -157,16 +116,44 @@ $ uvicorn app.app:app --reload
 ```
 
 ## Extra
-### Shutting down fly machine programmatically
-Fly machines are charged by the second and might take up to 15mins of idling before it decides to shut it self down. You can shut down the machine when you're done with the API to save costs. You can do this by sending a `POST` request to the following endpoint:
+
+### Webhooks
+When using `is_async: true`, the API will immediately return a task ID and process the transcription in the background.
+Once completed (or if an error occurs), the API will send a `POST` request to the `webhook.url` you provided.
+
+**Example Webhook Payload (Success):**
+```json
+{
+  "status": "completed",
+  "task_id": "your-task-id",
+  "result": {
+    "text": "Transcription text...",
+    "chunks": [
+      { "speaker": "SPEAKER_00", "timestamp": [0.0, 5.2], "text": "Hello world" },
+      { "speaker": "SPEAKER_01", "timestamp": [5.5, 8.1], "text": "How are you?" }
+    ],
+    "language": "en"
+  }
+}
 ```
-https://api.machines.dev/v1/apps/<app_name>/machines/<machine_id>/stop
+
+**Example Webhook Payload (Error):**
+```json
+{
+  "status": "error",
+  "task_id": "your-task-id",
+  "error": "Details about the error..."
+}
 ```
-Authorization header:
-```
-Authorization Bearer <fly_token>
-```
-Lear more [here](https://fly.io/docs/machines/api/machines-resource/)
+
+### Admin Key
+For security, you can set an `ADMIN_KEY` environment variable. If set, all API requests (except `/docs` and `/openapi.json`) will require an `X-Admin-Key` header matching this value.
+
+### Hugging Face Token for Diarization
+To use speaker diarization (`diarise_audio: true`), you need a Hugging Face User Access Token with `read` permissions. Set this token in the `HF_TOKEN` environment variable.
+You'll also need to accept the user conditions for:
+1. [`pyannote/segmentation-3.0`](https://hf.co/pyannote/segmentation-3.0)
+2. [`pyannote/speaker-diarization-3.1`](https://hf.co/pyannote/speaker-diarization-3.1)
 
 ## Acknowledgements
 

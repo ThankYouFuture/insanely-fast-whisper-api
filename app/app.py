@@ -25,17 +25,33 @@ hf_token = os.environ.get(
     "HF_TOKEN",
 )
 
-# fly runtime env https://fly.io/docs/machines/runtime-environment
-fly_machine_id = os.environ.get(
-    "FLY_MACHINE_ID",
-)
+
+# Déterminer le périphérique à utiliser
+if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+    device = torch.device("mps")
+    print("Using MPS device")
+    # model_kwargs doit être retiré pour MPS
+    model_kwargs = {}
+    main_torch_dtype = torch.float16 # MPS supporte float16
+elif torch.cuda.is_available():
+    device = torch.device("cuda:0")
+    print("Using CUDA device")
+    # Garder flash_attention_2 si CUDA est disponible et compatible
+    model_kwargs={"attn_implementation": "flash_attention_2"}
+    main_torch_dtype = torch.float16 # CUDA supporte float16
+else:
+    device = torch.device("cpu")
+    print("Using CPU device")
+    # Pas de model_kwargs spécifiques pour CPU, ou ceux compatibles CPU si besoin
+    model_kwargs = {}
+    main_torch_dtype = torch.float32 # CPU préfère float32 pour la compatibilité/performance
 
 pipe = pipeline(
     "automatic-speech-recognition",
     model="openai/whisper-large-v3",
-    torch_dtype=torch.float16,
-    device="cuda:0",
-    model_kwargs=({"attn_implementation": "flash_attention_2"}),
+    torch_dtype=main_torch_dtype,
+    device=device,
+    model_kwargs=model_kwargs if model_kwargs else None, # Ne passer que si non vide
 )
 
 app = FastAPI()
@@ -95,9 +111,6 @@ def process(
             if errorMessage is None
             else {"error": errorMessage, "status": "error", "task_id": task_id}
         )
-
-        if fly_machine_id is not None:
-            webhookResp["fly_machine_id"] = fly_machine_id
 
         requests.post(
             webhook.url,
@@ -189,8 +202,6 @@ def root(
                 "status": "completed",
                 "task_id": task_id,
             }
-        if fly_machine_id is not None:
-            resp["fly_machine_id"] = fly_machine_id
         return resp
     except Exception as e:
         print(e)

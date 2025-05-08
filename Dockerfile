@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/pytorch:24.01-py3
+FROM python:3.10-slim
 
 ENV PYTHON_VERSION=3.10
 ENV POETRY_VENV=/app/.venv
@@ -27,7 +27,8 @@ RUN poetry install
 RUN $POETRY_VENV/bin/pip install -U wheel \
     && $POETRY_VENV/bin/pip install ninja packaging
 
-RUN $POETRY_VENV/bin/pip install flash-attn --no-build-isolation
+# Supprimer l'installation de flash-attn car elle est spécifique à NVIDIA/CUDA
+# RUN $POETRY_VENV/bin/pip install flash-attn --no-build-isolation
 
 EXPOSE 9000
 
